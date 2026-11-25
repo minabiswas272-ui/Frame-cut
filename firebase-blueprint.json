@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "UserWorkspace": {
+      "title": "UserWorkspace",
+      "description": "Private user workspace preferences and active timeline state stored per authenticated user.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the workspace owner.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Display name shown in studio header.",
+          "maxLength": 120
+        },
+        "defaultFps": {
+          "type": "number",
+          "description": "Preferred sequence framerate (24, 30, or 60)."
+        },
+        "snapEnabled": {
+          "type": "boolean",
+          "description": "Whether timeline playhead and trim handles snap to grid."
+        },
+        "loopTrim": {
+          "type": "boolean",
+          "description": "Whether playback loops inside the active trim IN/OUT range."
+        },
+        "safeGuides": {
+          "type": "boolean",
+          "description": "Whether broadcast action/title safe guides are shown."
+        },
+        "activeProjectTitle": {
+          "type": "string",
+          "description": "Title of the most recently active project.",
+          "maxLength": 120
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server last update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "displayName",
+        "defaultFps",
+        "snapEnabled",
+        "loopTrim",
+        "safeGuides",
+        "activeProjectTitle",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "EditNote": {
+      "title": "EditNote",
+      "description": "Timecode-linked editorial note or AI research bookmark belonging to a user workspace.",
+      "type": "object",
+      "properties": {
+        "ownerId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the note owner.",
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "projectTitle": {
+          "type": "string",
+          "description": "Associated project title.",
+          "maxLength": 120
+        },
+        "timecodeSec": {
+          "type": "number",
+          "description": "Timeline timestamp in seconds."
+        },
+        "content": {
+          "type": "string",
+          "description": "Note body text.",
+          "maxLength": 1000
+        },
+        "category": {
+          "type": "string",
+          "enum": ["cut", "color", "audio", "research"],
+          "description": "Category of the editorial note."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server creation timestamp."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server update timestamp."
+        }
+      },
+      "required": [
+        "ownerId",
+        "projectTitle",
+        "timecodeSec",
+        "content",
+        "category",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserWorkspace"
+      },
+      "description": "Private user workspace preferences document keyed by Firebase Auth UID."
+    },
+    "/users/{userId}/notes/{noteId}": {
+      "schema": {
+        "$ref": "#/entities/EditNote"
+      },
+      "description": "Private timecode-linked director notes and research bookmarks under the user workspace."
+    }
+  }
+}

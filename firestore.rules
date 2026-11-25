@@ -1,0 +1,201 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened global primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Validation Blueprint: UserWorkspace
+    function isValidUserWorkspace(data, userId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'displayName',
+          'defaultFps',
+          'snapEnabled',
+          'loopTrim',
+          'safeGuides',
+          'activeProjectTitle',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'displayName',
+          'defaultFps',
+          'snapEnabled',
+          'loopTrim',
+          'safeGuides',
+          'activeProjectTitle',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.displayName is string
+        && data.displayName.size() <= 120
+        && data.defaultFps is number
+        && (data.defaultFps == 24 || data.defaultFps == 30 || data.defaultFps == 60)
+        && data.snapEnabled is bool
+        && data.loopTrim is bool
+        && data.safeGuides is bool
+        && data.activeProjectTitle is string
+        && data.activeProjectTitle.size() <= 120
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Validation Blueprint: EditNote
+    function isValidEditNote(data, userId) {
+      return data.keys().hasAll([
+          'ownerId',
+          'projectTitle',
+          'timecodeSec',
+          'content',
+          'category',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'ownerId',
+          'projectTitle',
+          'timecodeSec',
+          'content',
+          'category',
+          'createdAt',
+          'updatedAt'
+        ])
+        && data.ownerId is string
+        && data.ownerId == request.auth.uid
+        && data.ownerId == userId
+        && isValidId(data.ownerId)
+        && data.projectTitle is string
+        && data.projectTitle.size() >= 1
+        && data.projectTitle.size() <= 120
+        && data.timecodeSec is number
+        && data.timecodeSec >= 0
+        && data.timecodeSec <= 86400
+        && data.content is string
+        && data.content.size() >= 1
+        && data.content.size() <= 1000
+        && data.category is string
+        && data.category in ['cut', 'color', 'audio', 'research']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    // Master Gate helper for user parent document
+    function parentWorkspaceOwned(userId) {
+      return exists(/databases/$(database)/documents/users/$(userId))
+        && get(/databases/$(database)/documents/users/$(userId)).data.ownerId == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow get: if isValidId(userId) && isOwner(userId);
+      allow list: if false;
+
+      allow create: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserWorkspace(incoming(), userId)
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+
+      allow update: if isVerified()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserWorkspace(incoming(), userId)
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'displayName',
+            'defaultFps',
+            'snapEnabled',
+            'loopTrim',
+            'safeGuides',
+            'activeProjectTitle',
+            'updatedAt'
+          ])
+        );
+
+      allow delete: if isVerified() && isValidId(userId) && isOwner(userId);
+
+      match /notes/{noteId} {
+        allow get: if isValidId(userId)
+          && isValidId(noteId)
+          && isOwner(userId)
+          && existing().ownerId == request.auth.uid
+          && parentWorkspaceOwned(userId);
+
+        allow list: if isValidId(userId)
+          && isOwner(userId)
+          && resource.data.ownerId == request.auth.uid;
+
+        allow create: if isVerified()
+          && isValidId(userId)
+          && isValidId(noteId)
+          && isOwner(userId)
+          && isValidEditNote(incoming(), userId)
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time
+          && parentWorkspaceOwned(userId);
+
+        allow update: if isVerified()
+          && isValidId(userId)
+          && isValidId(noteId)
+          && isOwner(userId)
+          && isValidEditNote(incoming(), userId)
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && parentWorkspaceOwned(userId)
+          && (
+            incoming().diff(existing()).affectedKeys().hasOnly([
+              'projectTitle',
+              'timecodeSec',
+              'content',
+              'category',
+              'updatedAt'
+            ])
+          );
+
+        allow delete: if isVerified()
+          && isValidId(userId)
+          && isValidId(noteId)
+          && isOwner(userId)
+          && existing().ownerId == request.auth.uid
+          && parentWorkspaceOwned(userId);
+      }
+    }
+  }
+}

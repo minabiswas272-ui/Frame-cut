@@ -1,0 +1,6 @@
+{
+  "name": "FrameCut Studio",
+  "description": "Browser-based non-linear video editor with preview playback, multi-track timeline, precision trim controls, Google Drive media sync, Gemini editing intelligence, and cloud project storage.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
